@@ -10,6 +10,15 @@
 <link rel="manifest" href="pack-opener-manifest.json">
 <link rel="apple-touch-icon" href="pack-opener-icon-180.png">
 <link rel="icon" type="image/png" href="pack-opener-icon-180.png">
+<!-- iOS splash screens — no white flash when launching from the home screen -->
+<link rel="apple-touch-startup-image" href="splash/750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
+<link rel="apple-touch-startup-image" href="splash/828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)">
+<link rel="apple-touch-startup-image" href="splash/1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)">
+<link rel="apple-touch-startup-image" href="splash/1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)">
 <title>Pokémon Pack Opener</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; }
@@ -73,6 +82,25 @@ h1 {
 .era-tab:hover { background: rgba(255,255,255,0.1); color: #ccc; }
 .era-tab.active { border-color: var(--era-color, #FFD700); color: var(--era-color, #FFD700); background: rgba(255,215,0,0.1); }
 .era-sel { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; font-size: 0.6rem; font-weight: 800; background: #FFD700; color: #1a0800; border-radius: 8px; padding: 0 4px; margin-left: 5px; vertical-align: middle; }
+
+/* ── DAILY PACK ── */
+.daily-btn {
+  margin-bottom: 1.4rem;
+  padding: 0.6rem 1.6rem;
+  border-radius: 30px;
+  font-size: 0.9rem; font-weight: 800;
+  background: linear-gradient(135deg, #FFD700, #FF6B35);
+  color: #1a0800; border: none; cursor: pointer;
+  animation: glow-pulse 2.4s ease-in-out infinite;
+}
+.daily-btn.claimed {
+  background: rgba(255,255,255,0.05);
+  color: #9988bb;
+  border: 1px solid rgba(255,255,255,0.12);
+  animation: none;
+  cursor: default;
+  font-weight: 600;
+}
 
 /* ── SET GRID ── */
 .era-desc {
@@ -1069,6 +1097,8 @@ button:active, .era-tab:active, .set-btn:active, .fchip:active, .rc:active, .sc:
     <button class="my-runs-btn" id="sound-btn" style="padding:0.5rem 0.9rem;" onclick="toggleSound()">🔊</button>
   </div>
 
+  <button class="daily-btn" id="daily-btn" onclick="claimDailyPack()">🎁 Daily Pack ready!</button>
+
   <div class="config-section">
 
     <!-- Era tabs + Set grid -->
@@ -1360,6 +1390,7 @@ const ERAS = [
       { id:'base5',      name:'Team Rocket',      year:'2000', desc:'Introduces "Dark" Pokémon with sinister alternate artwork. Dark Charizard and Dark Blastoise are fan favorites.' },
       { id:'gym1',       name:'Gym Heroes',       year:'2000', desc:'Cards themed around Kanto Gym Leaders: Misty, Lt. Surge, Brock, and Erika each have their own Pokémon variants.' },
       { id:'gym2',       name:'Gym Challenge',    year:'2000', desc:'Continues the Gym theme with the remaining leaders: Koga, Blaine, Sabrina, and Giovanni.' },
+      { id:'base6',      name:'Legendary Collection', year:'2002', desc:'A greatest-hits reprint of Base through Team Rocket — and the first set ever to feature reverse-holo cards.' },
     ]
   },
   {
@@ -1368,6 +1399,7 @@ const ERAS = [
     sets: [
       { id:'neo1', name:'Neo Genesis',    year:'2000', desc:'The first Gen 2 set. Introduces Baby Pokémon (Cleffa, Igglybuff) and Pokémon Eggs. Features Typhlosion, Feraligatr, and Meganium.' },
       { id:'neo2', name:'Neo Discovery',  year:'2001', desc:'Features Espeon, Umbreon, Hitmontop, and other Johto favorites. Focuses on the Ruins of Alph and fossil research.' },
+      { id:'si1',  name:'Southern Islands', year:'2001', desc:'An 18-card collector\'s set whose cards connect into two tropical island scenes — Mew, Togepi, and friends on vacation.' },
       { id:'neo3', name:'Neo Revelation', year:'2001', desc:'Introduces the legendary beasts Suicune, Entei, and Raikou as holo rares. Also features Ho-Oh.' },
       { id:'neo4', name:'Neo Destiny',    year:'2002', desc:'The final Neo set. Features rare "Shining" Pokémon with alternate colors — including Shining Charizard, one of the most sought-after vintage cards.' },
     ]
@@ -1386,12 +1418,21 @@ const ERAS = [
     desc: 'The Hoenn / Advanced Generation era (2003–2007). Introduced Pokémon-ex cards with double the HP and a rule that gives your opponent 2 prizes when knocked out.',
     sets: [
       { id:'ex1',  name:'Ruby & Sapphire',     year:'2003', desc:'First Hoenn set. Introduces Pokémon-ex with massive HP. Features Blaziken-ex, Swampert-ex, and Sceptile-ex.' },
+      { id:'ex2',  name:'Sandstorm',           year:'2003', desc:'Desert-themed second EX set. Wobbuffet-ex and the sand Pokémon debut alongside more Hoenn favorites.' },
       { id:'ex3',  name:'Dragon',              year:'2003', desc:'Dragon-type focused set featuring Flygon, Kingdra, Salamence, and Dragonite. One of the most beloved early EX sets.' },
-      { id:'ex5',  name:'FireRed & LeafGreen', year:'2004', desc:'A nostalgia set revisiting Kanto with EX-era treatment. Includes Charizard-ex and the original starter lines.' },
-      { id:'ex9',  name:'Unseen Forces',       year:'2005', desc:'Features Johto legendaries and Baby Pokémon. Includes Ho-Oh-ex, Lugia-ex, and Gold Star Espeon and Umbreon.' },
-      { id:'ex10', name:'Delta Species',       year:'2005', desc:'Pokémon with alternate types — like Electric-type Charizard and Metal-type Mewtwo. A fan favorite for its unique concept.' },
-      { id:'ex13', name:'Crystal Guardians',   year:'2006', desc:'Crystal Pokémon return with updated EX-era artwork. Includes Blaziken-ex and Walrein-ex Crystal variants.' },
-      { id:'ex15', name:'Power Keepers',       year:'2007', desc:'The final EX series set before Diamond & Pearl. Last chance to pull EX-era cards before the mechanic was retired.' },
+      { id:'ex4',  name:'Team Magma vs Team Aqua', year:'2004', desc:'Every Pokémon belongs to Team Magma or Team Aqua — dual villain teams battling over Groudon and Kyogre.' },
+      { id:'ex5',  name:'Hidden Legends',      year:'2004', desc:'The Regi trio headline — Regirock, Regice, and Registeel ex — alongside Groudon and Kyogre.' },
+      { id:'ex6',  name:'FireRed & LeafGreen', year:'2004', desc:'A nostalgia set revisiting Kanto with EX-era treatment. Includes Charizard-ex and the original starter lines.' },
+      { id:'ex7',  name:'Team Rocket Returns', year:'2004', desc:'Dark Pokémon return with Rocket\'s Pokémon-ex. Home of the Gold Star Torchic, Treecko, and Mudkip.' },
+      { id:'ex8',  name:'Deoxys',              year:'2005', desc:'Deoxys in all four formes, plus the coveted Gold Star Rayquaza — one of the era\'s crown jewels.' },
+      { id:'ex9',  name:'Emerald',             year:'2005', desc:'Battle Frontier era. Hoenn starters as Pokémon-ex with reverse-holo treatment throughout.' },
+      { id:'ex10', name:'Unseen Forces',       year:'2005', desc:'Features Johto legendaries and Baby Pokémon. Includes Ho-Oh-ex, Lugia-ex, and Gold Star Espeon and Umbreon.' },
+      { id:'ex11', name:'Delta Species',       year:'2005', desc:'Pokémon with alternate types — like Electric-type Charizard and Metal-type Mewtwo. A fan favorite for its unique concept.' },
+      { id:'ex12', name:'Legend Maker',        year:'2006', desc:'Mew-ex and the fossil Pokémon headline a legend-themed set with Gold Star Regice.' },
+      { id:'ex13', name:'Holon Phantoms',      year:'2006', desc:'More delta species plus the Holon energies. Home of Gold Star Pikachu and Gyarados.' },
+      { id:'ex14', name:'Crystal Guardians',   year:'2006', desc:'Crystal Pokémon return with updated EX-era artwork. Includes Blaziken-ex and Walrein-ex Crystal variants.' },
+      { id:'ex15', name:'Dragon Frontiers',    year:'2006', desc:'The final delta species set — dragon-themed deltas including the legendary Gold Star Charizard δ.' },
+      { id:'ex16', name:'Power Keepers',       year:'2007', desc:'The final EX series set before Diamond & Pearl. Last chance to pull EX-era cards before the mechanic was retired.' },
     ]
   },
   {
@@ -1399,13 +1440,19 @@ const ERAS = [
     desc: 'The Sinnoh and Johto remake era (2007–2011). Introduced Lv.X cards (powered-up forms that level up from play) and later Pokémon SP (Team Galactic\'s individual Pokémon with "C", "G", "GL" suffixes).',
     sets: [
       { id:'dp1',   name:'Diamond & Pearl',      year:'2007', desc:'First Sinnoh set. Introduces Pokémon Lv.X — cards that level up on top of a Pokémon already in play for a power boost.' },
+      { id:'dp2',   name:'Mysterious Treasures',  year:'2007', desc:'Palkia joins the fray alongside the fan-favorite Lucario Lv.X and the Sinnoh fossils.' },
       { id:'dp3',   name:'Secret Wonders',        year:'2007', desc:'Fan-favorite set featuring Gardevoir, Absol, and Ralts line. Includes the popular Gardevoir Lv.X.' },
+      { id:'dp4',   name:'Great Encounters',      year:'2008', desc:'Darkrai headlines in multiple forms, joined by Cresselia Lv.X — the lunar duo\'s debut.' },
       { id:'dp5',   name:'Majestic Dawn',         year:'2008', desc:'Features the Lake Guardians trio: Uxie, Mesprit, and Azelf. Includes Leafeon Lv.X and Glaceon Lv.X.' },
       { id:'dp6',   name:'Legends Awakened',      year:'2008', desc:'Focuses on legendary Pokémon. Includes Regigigas Lv.X and a massive 146-card set size.' },
+      { id:'dp7',   name:'Stormfront',            year:'2008', desc:'The DP finale — Dusknoir Lv.X and Machamp headline, plus the first secret-rare shiny Pokémon.' },
       { id:'pl1',   name:'Platinum',              year:'2009', desc:'Introduces Pokémon SP — named individual Pokémon belonging to villains and rivals. Begins the competitive SP format.' },
       { id:'pl2',   name:'Rising Rivals',         year:'2009', desc:'Expands the SP lineup. Features Garchomp C Lv.X — one of the best competitive cards of the era.' },
+      { id:'pl3',   name:'Supreme Victors',       year:'2009', desc:'The biggest Platinum set. Charizard G Lv.X and Rayquaza C Lv.X lead the SP armies.' },
       { id:'pl4',   name:'Arceus',                year:'2009', desc:'A movie tie-in set where every card is an Arceus variant. Themed around the Mythical Pokémon with 9 different Arceus cards.' },
       { id:'hgss1', name:'HeartGold SoulSilver',  year:'2010', desc:'Johto remakes era. Beautiful artwork revisiting Gen 2. Introduces Pokémon Prime — a new holo variant for evolved Pokémon.' },
+      { id:'hgss2', name:'HS Unleashed',          year:'2010', desc:'Steelix and Tyranitar Prime lead, and the two-card LEGEND pairs debut with Entei & Raikou.' },
+      { id:'hgss3', name:'HS Undaunted',          year:'2010', desc:'Espeon and Umbreon Prime headline with Houndoom Prime and the Kyogre & Groudon LEGEND.' },
       { id:'hgss4', name:'HS Triumphant',         year:'2011', desc:'Final HGSS set. Features Pokémon Prime and the legendary Celebi Prime. Competitive staple cards.' },
       { id:'col1',  name:'Call of Legends',       year:'2011', desc:'Small set bridging HGSS and Black & White. Features Shiny Pokémon in the rare slot and reprints of popular holos.' },
     ]
@@ -1415,9 +1462,14 @@ const ERAS = [
     desc: 'The Unova era (2011–2013). Introduced EX cards (again) with a new look, Full Art cards showing Pokémon across the entire card, and the Team Plasma villain subset.',
     sets: [
       { id:'bw1',  name:'Black & White',       year:'2011', desc:'First Unova set. Clean redesign with white card borders. Introduces Full Art Supporter cards and the new EX mechanic.' },
+      { id:'bw2',  name:'Emerging Powers',     year:'2011', desc:'Tornadus and Thundurus debut — and the format-warping Pokémon Catcher arrives.' },
+      { id:'bw3',  name:'Noble Victories',     year:'2011', desc:'Victini headlines with the Swords of Justice trio. Home of the beloved coin-flipping "Fliptini".' },
       { id:'bw4',  name:'Next Destinies',      year:'2012', desc:'Introduces Mewtwo-EX — arguably the most dominant competitive card of the era. Also features Shaymin-EX.' },
       { id:'bw5',  name:'Dark Explorers',      year:'2012', desc:'Team Plasma-themed. Features Darkrai-EX and Raikou-EX as competitive staples with stunning Full Art versions.' },
       { id:'bw6',  name:'Dragons Exalted',     year:'2012', desc:'Dragon-type focus. Rayquaza-EX and Giratina-EX headline the set. Includes Secret Rare gold cards.' },
+      { id:'dv1',  name:'Dragon Vault',        year:'2012', desc:'A 21-card all-dragon mini set with exclusive holo Rayquaza, Salamence, and Hydreigon.' },
+      { id:'bw7',  name:'Boundaries Crossed',  year:'2012', desc:'Black Kyurem-EX and White Kyurem-EX debut; Landorus-EX went on to dominate the format.' },
+      { id:'bw8',  name:'Plasma Storm',        year:'2013', desc:'Team Plasma arrives in force — Lugia-EX and the infamous Plasma Klinklang lockdown deck.' },
       { id:'bw9',  name:'Plasma Freeze',       year:'2013', desc:'Team Plasma expansion. Deoxys-EX and Thundurus-EX were tournament mainstays. Features ACE SPEC Pokémon Catcher.' },
       { id:'bw10', name:'Plasma Blast',        year:'2013', desc:'Final Plasma set. Genesect-EX is the star. Introduces Pokémon-EX Mega Evolution artwork previews.' },
       { id:'bw11', name:'Legendary Treasures', year:'2013', desc:'Final BW set. Giant 140-card pool reprinting fan favorites. Radiant Collection subset features chibi Pokémon art.' },
@@ -1429,12 +1481,17 @@ const ERAS = [
     sets: [
       { id:'xy1',  name:'XY',              year:'2014', desc:'First Kalos set. Introduces Mega Evolution cards. Features Yveltal-EX and Xerneas-EX as the flagship legendaries.' },
       { id:'xy2',  name:'Flashfire',       year:'2014', desc:'Charizard set! Both Mega Charizard X-EX and Mega Charizard Y-EX are here — two of the most popular cards of the era.' },
+      { id:'xy3',  name:'Furious Fists',   year:'2014', desc:'Fighting-type focus — Lucario-EX and Mega Lucario-EX headline with Hawlucha in tow.' },
       { id:'xy4',  name:'Phantom Forces',  year:'2014', desc:'Introduces ACE SPEC replacements and Gengar-EX. Aegislash-EX was a competitive powerhouse.' },
+      { id:'dc1',  name:'Double Crisis',   year:'2015', desc:'A 34-card Team Magma vs Team Aqua throwback mini-set — the villain teams return after a decade.' },
       { id:'xy5',  name:'Primal Clash',    year:'2015', desc:'Primal Kyogre-EX and Primal Groudon-EX with Ancient Traits. Some of the highest HP cards ever printed at the time.' },
       { id:'xy6',  name:'Roaring Skies',   year:'2015', desc:'Features M Rayquaza-EX — considered one of the most powerful Mega Evolution cards ever printed. Dominated competitive play.' },
       { id:'xy7',  name:'Ancient Origins', year:'2015', desc:'Introduces Gold Rares (rainbow-bordered secret cards). Features Hoopa-EX and the Primal Kyogre / Groudon ancient lore.' },
       { id:'xy8',  name:'BREAKthrough',   year:'2015', desc:'Introduces Pokémon BREAK — new evolution cards that stack on top of existing Pokémon with unique gold foil art.' },
       { id:'xy9',  name:'BREAKpoint',     year:'2016', desc:'Expands the BREAK mechanic. Features Gyarados-EX and the fan-favorite Trevenant BREAK competitive deck.' },
+      { id:'g1',   name:'Generations',     year:'2016', desc:'20th-anniversary special set. The Radiant Collection returns with adorable full-card art and Charizard-EX.' },
+      { id:'xy10', name:'Fates Collide',   year:'2016', desc:'Zygarde-EX headlines alongside Mega Alakazam-EX, tying the Kalos story together.' },
+      { id:'xy11', name:'Steam Siege',     year:'2016', desc:'Volcanion debuts, and dual-type Pokémon return for the first time since the e-Card era.' },
       { id:'xy12', name:'Evolutions',      year:'2016', desc:'A love letter to the original TCG — nearly identical reprints of Base Set cards with modern Full Art and Secret Rare variants. Charizard-EX is stunning.' },
     ]
   },
@@ -1446,9 +1503,14 @@ const ERAS = [
       { id:'sm2',   name:'Guardians Rising', year:'2017', desc:'Tapu Lele-GX dominated competitive play for years as a search engine. Also features Aqua Patch as a competitive staple.' },
       { id:'sm3',   name:'Burning Shadows',  year:'2017', desc:'Charizard-GX with gorgeous Full Art and Rainbow Rare versions. Ho-Oh-GX and Gardevoir-GX also headline.' },
       { id:'sm35',  name:'Shining Legends',  year:'2017', desc:'Small 73-card set focused on Shiny Pokémon and Mythicals. Features Shining Rayquaza and Shining Ho-Oh.' },
+      { id:'sm4',   name:'Crimson Invasion', year:'2017', desc:'The Ultra Beasts invade — Buzzwole-GX, Guzzlord-GX, and Kartana-GX crash into Alola.' },
       { id:'sm5',   name:'Ultra Prism',      year:'2018', desc:'Introduces Prism Star cards — one copy allowed per deck with powerful effects. Features Dialga, Palkia, and Dusk Mane/Dawn Wings Necrozma.' },
+      { id:'sm6',   name:'Forbidden Light',  year:'2018', desc:'Ultra Necrozma-GX headlines with Zygarde-GX — light and shadow collide in Alola.' },
       { id:'sm7',   name:'Celestial Storm',  year:'2018', desc:'Rayquaza-GX headlines alongside Jirachi as a competitive staple. Weather trio theme.' },
+      { id:'sm75',  name:'Dragon Majesty',   year:'2018', desc:'All-dragon special set — Reshiram-GX, Salamence-GX, and Dragonite-GX soar together.' },
+      { id:'sm8',   name:'Lost Thunder',     year:'2018', desc:'The biggest English set ever printed (240+ cards). Lugia-GX, Zeraora-GX, and the Lost March deck.' },
       { id:'sm9',   name:'Team Up',          year:'2019', desc:'Introduces TAG TEAM GX — two Pokémon on one card with 250+ HP. Pikachu & Zekrom-GX and Gengar & Mimikyu-GX are fan favorites.' },
+      { id:'det1',  name:'Detective Pikachu', year:'2019', desc:'Movie tie-in mini set with live-action-styled artwork — Detective Pikachu himself and Mewtwo-GX.' },
       { id:'sm10',  name:'Unbroken Bonds',   year:'2019', desc:'TAG TEAM peak. Reshiram & Charizard-GX had 270 HP — the highest at the time — and dominated tournaments.' },
       { id:'sm11',  name:'Unified Minds',    year:'2019', desc:'Massive 258-card set. Gardevoir & Sylveon-GX TAG TEAM with beautiful Full Art. Includes Mewtwo & Mew-GX.' },
       { id:'sm115', name:'Hidden Fates',     year:'2019', desc:'Collector dream set. The Shiny Vault subset contains alternate-color shiny versions of popular Pokémon — including Shiny Charizard-GX.' },
@@ -1468,9 +1530,11 @@ const ERAS = [
       { id:'swsh5',    name:'Battle Styles',   year:'2021', desc:'Single Strike vs. Rapid Strike mechanic arrives. Urshifu VMAX in both battle styles with unique moves.' },
       { id:'swsh6',    name:'Chilling Reign',  year:'2021', desc:'Ice Rider and Shadow Rider Calyrex VMAX with stunning full-art variants. Beautiful winter-themed artwork throughout.' },
       { id:'swsh7',    name:'Evolving Skies',  year:'2021', desc:'The Eeveelution set — every Eeveelution gets a VMAX card. Also features Rayquaza VMAX and beloved alternate-art Pokémon.' },
+      { id:'cel25',    name:'Celebrations',    year:'2021', desc:'The 25th-anniversary set — every card is a holo legend, plus Classic Collection reprints of icons like Base Set Charizard.' },
       { id:'swsh8',    name:'Fusion Strike',   year:'2021', desc:'Mew VMAX was the dominant competitive deck for most of its format. Massive 284-card set with tons of pull targets.' },
       { id:'swsh9',    name:'Brilliant Stars', year:'2022', desc:'Introduces VSTAR cards with a one-time VSTAR Power. Arceus VSTAR became an instant competitive staple.' },
       { id:'swsh10',   name:'Astral Radiance', year:'2022', desc:'Origin Forme Dialga and Palkia VSTAR with stunning alternate-art versions. Introduces the Radiant Pokémon rarity.' },
+      { id:'pgo',      name:'Pokémon GO',      year:'2022', desc:'The Pokémon GO crossover — Mewtwo VSTAR, Radiant Eevee, and Ditto cards hiding under peelable disguises.' },
       { id:'swsh11',   name:'Lost Origin',     year:'2022', desc:'Giratina VSTAR and the return of the Lost Zone mechanic. Aerodactyl VSTAR was a competitive powerhouse.' },
       { id:'swsh12',   name:'Silver Tempest',  year:'2022', desc:'Lugia VSTAR headlines. Also features Alolan Vulpix VSTAR and Regieleki VMAX in the Trainer Gallery.' },
       { id:'swsh12pt5',name:'Crown Zenith',    year:'2023', desc:'The SWSH farewell set. The Galarian Gallery subset is considered some of the most beautiful card art ever printed — 70 full-art cards.' },
@@ -1519,6 +1583,7 @@ const PACK_IMAGES = {
   base5:  'https://archives.bulbagarden.net/media/upload/1/1c/Team_Rocket_Booster_Giovanni.jpg',
   gym1:   'https://archives.bulbagarden.net/media/upload/4/4a/Gym_Heroes_Booster_Misty.jpg',
   gym2:   'https://archives.bulbagarden.net/media/upload/9/9c/Gym_Challenge_Booster_Blaine.jpg',
+  base6:  'https://archives.bulbagarden.net/media/upload/d/d9/Legendary_Collection_Booster_Mewtwo.jpg',
   neo1:   'https://archives.bulbagarden.net/media/upload/8/80/Neo_Genesis_Booster_Lugia.jpg',
   neo2:   'https://archives.bulbagarden.net/media/upload/7/7a/Neo_Discovery_Booster_Umbreon.jpg',
   neo3:   'https://archives.bulbagarden.net/media/upload/8/83/Neo_Revelation_Booster_Entei.jpg',
@@ -1531,28 +1596,45 @@ const PACK_IMAGES = {
   ex5:    'https://archives.bulbagarden.net/media/upload/8/89/EX5_Booster_Metagross.jpg',
   ex9:    'https://archives.bulbagarden.net/media/upload/8/89/EX9_Booster_Kyogre.jpg',
   ex10:   'https://archives.bulbagarden.net/media/upload/a/a1/EX10_Booster_Umbreon.jpg',
+  ex2:    'https://archives.bulbagarden.net/media/upload/e/eb/EX2_Booster_Zangoose.jpg',
+  ex4:    'https://archives.bulbagarden.net/media/upload/c/c4/EX4_Booster_Sharpedo.jpg',
+  ex6:    'https://archives.bulbagarden.net/media/upload/3/3f/EX6_Booster_Charizard.jpg',
+  ex7:    'https://archives.bulbagarden.net/media/upload/7/70/EX7_Booster_Mewtwo.jpg',
+  ex8:    'https://archives.bulbagarden.net/media/upload/2/25/EX8_Booster_Rayquaza.jpg',
+  ex11:   'https://archives.bulbagarden.net/media/upload/c/c2/EX11_Booster_Dragonite.jpg',
+  ex12:   'https://archives.bulbagarden.net/media/upload/d/d0/EX12_Booster_Aerodactyl.jpg',
   ex13:   'https://archives.bulbagarden.net/media/upload/e/e6/EX13_Booster_Mewtwo.jpg',
+  ex14:   'https://archives.bulbagarden.net/media/upload/f/f4/EX14_Booster_Charizard.jpg',
   ex15:   'https://archives.bulbagarden.net/media/upload/8/82/EX15_Booster_Salamence.jpg',
+  ex16:   'https://archives.bulbagarden.net/media/upload/5/55/EX16_Booster_Raichu.jpg',
   dp1:    'https://archives.bulbagarden.net/media/upload/5/50/DP1_Booster_Dialga.jpg',
-  dp3:    'https://archives.bulbagarden.net/media/upload/d/d6/DP2_Booster_Garchomp.jpg',
-  dp5:    'https://archives.bulbagarden.net/media/upload/5/56/DP4_Booster_Dialga.jpg',
-  dp6:    'https://archives.bulbagarden.net/media/upload/3/36/DP7_Booster_Regigigas.jpg',
+  dp2:    'https://archives.bulbagarden.net/media/upload/d/d6/DP2_Booster_Garchomp.jpg',
+  dp4:    'https://archives.bulbagarden.net/media/upload/c/c1/DP4_Booster_Darkrai.jpg',
+  dp7:    'https://archives.bulbagarden.net/media/upload/6/65/DP7_Booster_Dusknoir.jpg',
   pl1:    'https://archives.bulbagarden.net/media/upload/d/df/PL1_Booster_Dialga.jpg',
   pl2:    'https://archives.bulbagarden.net/media/upload/6/6f/PL2_Booster_Scizor.jpg',
   pl4:    'https://archives.bulbagarden.net/media/upload/8/8c/PL4_Booster_Arceus_Grass.jpg',
   hgss1:  'https://archives.bulbagarden.net/media/upload/5/5d/HS1_Booster_Lugia.jpg',
+  hgss2:  'https://archives.bulbagarden.net/media/upload/4/47/HS2_Booster_Entei.jpg',
+  hgss3:  'https://archives.bulbagarden.net/media/upload/8/83/HS3_Booster_Houndoom.jpg',
   hgss4:  'https://archives.bulbagarden.net/media/upload/d/dd/HS4_Booster_Dialga.jpg',
-  col1:   'https://archives.bulbagarden.net/media/upload/c/ce/HS3_Booster_Rayquaza.jpg',
   bw1:    'https://archives.bulbagarden.net/media/upload/e/e6/BW1_Booster_Reshiram.jpg',
+  bw2:    'https://archives.bulbagarden.net/media/upload/3/35/BW2_Booster_Tornadus.jpg',
+  bw3:    'https://archives.bulbagarden.net/media/upload/9/96/BW3_Booster_Victini.jpg',
   bw4:    'https://archives.bulbagarden.net/media/upload/f/f2/BW4_Booster_Mewtwo.jpg',
   bw5:    'https://archives.bulbagarden.net/media/upload/b/bb/BW5_Booster_Darkrai.jpg',
   bw6:    'https://archives.bulbagarden.net/media/upload/3/35/BW6_Booster_Rayquaza.jpg',
+  dv1:    'https://archives.bulbagarden.net/media/upload/7/7b/Dragon_Vault_Booster_Rayquaza.jpg',
+  bw7:    'https://archives.bulbagarden.net/media/upload/8/8f/BW7_Booster_Black_Kyurem.jpg',
+  bw8:    'https://archives.bulbagarden.net/media/upload/6/68/BW8_Booster_Lugia.jpg',
   bw9:    'https://archives.bulbagarden.net/media/upload/2/2c/BW9_Booster_Deoxys.jpg',
   bw10:       'https://archives.bulbagarden.net/media/upload/e/e7/BW10_Booster_Genesect.jpg',
   // ── XY ────────────────────────────────────────────────────────────────────────
   xy1:        'https://archives.bulbagarden.net/media/upload/6/64/XY1_Booster_Yveltal.jpg',
   xy2:        'https://archives.bulbagarden.net/media/upload/1/13/XY2_Booster_Charizard_Y.jpg',
+  xy3:        'https://archives.bulbagarden.net/media/upload/d/d1/XY3_Booster_Lucario.jpg',
   xy4:        'https://archives.bulbagarden.net/media/upload/0/0d/XY4_Booster_Gengar.jpg',
+  dc1:        'https://archives.bulbagarden.net/media/upload/d/d7/Double_Crisis_Booster_Kyogre_Shelly.jpg',
   xy5:        'https://archives.bulbagarden.net/media/upload/c/c4/XY5_Booster_Kyogre.jpg',
   xy6:        'https://archives.bulbagarden.net/media/upload/8/87/XY6_Booster_Rayquaza.jpg',
   xy7:        'https://archives.bulbagarden.net/media/upload/d/d2/XY7_Booster_Hoopa.jpg',
@@ -1564,8 +1646,12 @@ const PACK_IMAGES = {
   sm2:        'https://archives.bulbagarden.net/media/upload/6/68/SM2_Booster_Kommo-o.jpg',
   sm3:        'https://archives.bulbagarden.net/media/upload/9/96/SM3_Booster_Ho-Oh.jpg',
   sm35:       'https://archives.bulbagarden.net/media/upload/5/57/SM3Plus_Shining_Legends_pack.jpg',
+  sm4:        'https://archives.bulbagarden.net/media/upload/8/83/SM4_Booster_Buzzwole.jpg',
   sm5:        'https://archives.bulbagarden.net/media/upload/c/c8/SM5_Booster_Dawn_Wings_Necrozma.jpg',
+  sm6:        'https://archives.bulbagarden.net/media/upload/a/a2/SM6_Booster_Necrozma.jpg',
   sm7:        'https://archives.bulbagarden.net/media/upload/3/3f/SM7_Booster_Rayquaza.jpg',
+  sm75:       'https://archives.bulbagarden.net/media/upload/2/2b/Dragon_Majesty_Booster_Charizard.jpg',
+  sm8:        'https://archives.bulbagarden.net/media/upload/6/6a/SM8_Booster_Lugia.jpg',
   sm9:        'https://archives.bulbagarden.net/media/upload/a/ae/SM9_Booster_Pikachu_Zekrom.jpg',
   sm10:       'https://archives.bulbagarden.net/media/upload/8/86/SM10_Booster_Lucario_Melmetal.jpg',
   sm11:       'https://archives.bulbagarden.net/media/upload/a/aa/SM11_Booster_Mewtwo_Mew.jpg',
@@ -1580,9 +1666,11 @@ const PACK_IMAGES = {
   swsh5:      'https://archives.bulbagarden.net/media/upload/8/85/SWSH5_Booster_Rapid_Strike_Urshifu.jpg',
   swsh6:      'https://archives.bulbagarden.net/media/upload/0/0e/SWSH6_Booster_Ice_Rider_Calyrex_copy.jpg',
   swsh7:      'https://archives.bulbagarden.net/media/upload/a/a5/SWSH7_Booster_Rayquaza.jpg',
+  cel25:      'https://archives.bulbagarden.net/media/upload/b/b9/Celebrations_Booster.jpg',
   swsh8:      'https://archives.bulbagarden.net/media/upload/d/d5/SWSH8_Booster_Mew.jpg',
   swsh9:      'https://archives.bulbagarden.net/media/upload/c/ce/SWSH9_Booster_Arceus.jpg',
   swsh10:     'https://archives.bulbagarden.net/media/upload/b/b5/SWSH10_Booster_Origin_Dialga.jpg',
+  pgo:        'https://archives.bulbagarden.net/media/upload/b/b6/Pok%C3%A9mon_GO_Booster.jpg',
   swsh11:     'https://archives.bulbagarden.net/media/upload/a/a1/SWSH11_Booster_Origin_Forme_Giratina.jpg',
   swsh12:     'https://archives.bulbagarden.net/media/upload/2/2b/SWSH12_Booster_Lugia.jpg',
   swsh12pt5:  'https://archives.bulbagarden.net/media/upload/d/dd/Crown_Zenith_Booster.jpg',
@@ -1875,7 +1963,7 @@ function showUpdateToast() {
 }
 
 window.onload = () => {
-  buildStars(); fixStaleCachedSets(); buildEraTabsAndSets(); updateCacheUI(); updateSoundBtn();
+  buildStars(); fixStaleCachedSets(); buildEraTabsAndSets(); updateCacheUI(); updateSoundBtn(); updateDailyBtn();
   // Offline support — service workers only run over http(s), so this is a no-op for file://
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     const wasControlled = !!navigator.serviceWorker.controller;
@@ -3271,9 +3359,14 @@ function renderPokeTable(pokemonKeys, setIds, setMeta, pokemonSets, showTotal, p
   thead.appendChild(hrow);
   table.appendChild(thead);
 
-  // ── Body ──
+  // ── Body — chunked rendering ──
+  // The Overall tab is ~1,000 rows × ~130 columns; building it in one go freezes
+  // the main thread for seconds on phones. Build 60 rows per animation frame instead.
   const tbody = document.createElement('tbody');
-  pokemonKeys.forEach(key => {
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+
+  const buildRow = (key) => {
     const name = pokemonLabel?.[key] || key; // human-readable display name
 
     const tr = document.createElement('tr');
@@ -3341,13 +3434,25 @@ function renderPokeTable(pokemonKeys, setIds, setMeta, pokemonSets, showTotal, p
 
     tr.dataset.hasCards = rowHasAny ? '1' : '0';
     tr.dataset.total = rowTotal;
-    tbody.appendChild(tr);
-  });
+    return tr;
+  };
 
-  table.appendChild(tbody);
-  wrap.appendChild(table);
-  filterTableRows();
+  const CHUNK = 60;
+  const token = ++tableRenderToken; // switching tabs mid-render cancels the old loop
+  let i = 0;
+  (function buildChunk() {
+    if (token !== tableRenderToken || !document.body.contains(tbody)) return;
+    const frag = document.createDocumentFragment();
+    const end = Math.min(i + CHUNK, pokemonKeys.length);
+    for (; i < end; i++) frag.appendChild(buildRow(pokemonKeys[i]));
+    tbody.appendChild(frag);
+    filterTableRows(); // keep active search/hide-missing applied as rows stream in
+    // setTimeout, not rAF: rAF stops firing in backgrounded tabs, stranding the build
+    if (i < pokemonKeys.length) setTimeout(buildChunk, 0);
+  })();
 }
+
+let tableRenderToken = 0;
 
 function filterTableRows() {
   const query     = (document.getElementById('table-search')?.value || '').toLowerCase().trim();
@@ -3633,6 +3738,58 @@ function playSfx(kind) {
       noiseBurst(0.4, 5200, 0.04);                        // sparkle dust
     }
   } catch {}
+}
+
+// ── DAILY PACK ────────────────────────────────────────────────────────────────
+// One bonus pack per day from a random set — keep the streak alive.
+
+const DAILY_KEY = 'pkm-daily';
+
+function loadDaily() {
+  try { return JSON.parse(localStorage.getItem(DAILY_KEY) || 'null') || { last: '', streak: 0 }; }
+  catch { return { last: '', streak: 0 }; }
+}
+
+function dateStr(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 864e5);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function updateDailyBtn() {
+  const btn = document.getElementById('daily-btn');
+  if (!btn) return;
+  const daily = loadDaily();
+  if (daily.last === dateStr()) {
+    btn.classList.add('claimed');
+    btn.disabled = true;
+    btn.textContent = `✓ Daily pack opened · 🔥 ${daily.streak}-day streak`;
+  } else {
+    btn.classList.remove('claimed');
+    btn.disabled = false;
+    btn.textContent = daily.streak > 0 && daily.last === dateStr(-1)
+      ? `🎁 Daily Pack ready! · 🔥 ${daily.streak}-day streak`
+      : '🎁 Daily Pack ready!';
+  }
+}
+
+function claimDailyPack() {
+  const daily = loadDaily();
+  if (daily.last === dateStr()) return;
+  daily.streak = daily.last === dateStr(-1) ? daily.streak + 1 : 1;
+  daily.last = dateStr();
+  try { localStorage.setItem(DAILY_KEY, JSON.stringify(daily)); } catch {}
+  updateDailyBtn();
+
+  // A random set from a random era — the surprise is the point
+  const ei = Math.floor(Math.random() * ERAS.length);
+  const sets = ERAS[ei].sets;
+  const set = sets[Math.floor(Math.random() * sets.length)];
+  state.eraIdx = ei;
+  state.selections = new Set([selKey(ei, set.id)]);
+  state.focusKey = selKey(ei, set.id);
+  buildEraTabsAndSets();
+  state.packId = 'standard';
+  goToPack();
 }
 
 // ── DIALOGS ───────────────────────────────────────────────────────────────────
