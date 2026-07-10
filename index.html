@@ -286,6 +286,7 @@ h1 {
   transition: background 0.15s, border-color 0.15s;
 }
 .save-run-btn:hover { background: rgba(100,200,120,0.22); border-color: rgba(100,200,120,0.6); }
+.save-run-btn:disabled { opacity: 0.45; cursor: default; }
 
 /* ── RUNS LIST SCREEN ── */
 #runs-screen { align-items: center; padding-top: 2rem; }
@@ -1142,11 +1143,11 @@ button:active, .era-tab:active, .set-btn:active, .fchip:active, .rc:active, .sc:
 <div id="pack-screen" class="screen screen-center">
   <div id="pack-art" class="pack-art" onclick="clickPack()">
     <div class="pa-bg" id="pack-bg"></div>
-    <img class="pa-pack-img" id="pack-img" src="" alt="" referrerpolicy="no-referrer" style="display:none">
+    <img class="pa-pack-img" id="pack-img" src="" alt="" referrerpolicy="no-referrer" crossorigin="anonymous" style="display:none">
     <div class="pa-fallback" id="pack-fallback">
       <div class="pa-logo-wrap"><span class="pa-logo-text">POKÉMON</span></div>
       <div class="pa-tcg-banner"><span class="pa-tcg-text">Trading Card Game</span></div>
-      <img class="pack-set-logo" id="pack-logo" src="" alt="" style="display:none">
+      <img class="pack-set-logo" id="pack-logo" src="" alt="" crossorigin="anonymous" style="display:none">
       <span class="pack-set-name" id="pack-name">Pack</span>
     </div>
     <div class="pa-info-bar">
@@ -1170,9 +1171,9 @@ button:active, .era-tab:active, .set-btn:active, .fchip:active, .rc:active, .sc:
 <div id="rip-screen" class="screen screen-center">
   <p class="rip-counter" id="rip-counter"></p>
   <div class="rip-stage" id="rip-stage" onclick="ripTap()">
-    <img class="rip-face rip-back" id="rip-back" src="https://images.pokemontcg.io/cardback.png" alt="">
+    <img class="rip-face rip-back" id="rip-back" src="cardback.png" alt="">
     <div class="rip-face rip-front" id="rip-front" style="display:none">
-      <img id="rip-front-img" src="" alt="">
+      <img id="rip-front-img" src="" alt="" crossorigin="anonymous">
       <div class="holo-sheen" id="rip-sheen" style="display:none"></div>
     </div>
   </div>
@@ -1195,7 +1196,6 @@ button:active, .era-tab:active, .set-btn:active, .fchip:active, .rc:active, .sc:
   <div class="cards-grid" id="cards-grid"></div>
   <div class="cards-actions">
     <button class="btn-ghost" onclick="showScreen('config-screen')">← Home</button>
-    <button class="btn-ghost" onclick="revealAll()">Reveal All</button>
     <button class="save-run-btn" id="add-to-run-btn" style="display:none" onclick="addPackToRun()">➕ Add to Playthrough…</button>
     <button class="save-run-btn" onclick="saveCurrentPackAsRun()">💾 Save as Playthrough</button>
     <button class="open-btn" onclick="openAnother()" style="padding:0.75rem 2rem;font-size:1rem;">Open Another Pack ✨</button>
@@ -1345,7 +1345,7 @@ button:active, .era-tab:active, .set-btn:active, .fchip:active, .rc:active, .sc:
 <!-- ══════════ MODAL ══════════ -->
 <div class="modal" id="card-modal" onclick="closeModal()">
   <div class="modal-img-wrap" onclick="event.stopPropagation()">
-    <img id="modal-img" src="" alt="">
+    <img id="modal-img" src="" alt="" crossorigin="anonymous">
     <button class="modal-close" onclick="closeModal()">✕</button>
   </div>
 </div>
@@ -1935,12 +1935,15 @@ function fixStaleCachedSets() {
   Object.keys(localStorage).forEach(k => {
     if (/^poke_v[1-4]_/.test(k)) localStorage.removeItem(k);
   });
-  // Purge fake "Card N" binder entries recorded while placeholder sets were being served
+  // Purge fake "Card N" placeholder entries AND malformed entries (a null value
+  // would crash the Binder screen on every visit)
   try {
     const binder = loadBinder();
-    const fakes = Object.keys(binder).filter(id => /^Card \d+$/.test(binder[id]?.name || ''));
-    if (fakes.length) {
-      fakes.forEach(id => delete binder[id]);
+    const bad = Object.keys(binder).filter(id =>
+      !binder[id] || typeof binder[id] !== 'object' || typeof binder[id].n !== 'number' ||
+      /^Card \d+$/.test(binder[id].name || ''));
+    if (bad.length) {
+      bad.forEach(id => delete binder[id]);
       saveBinder(binder);
     }
   } catch {}
@@ -2023,6 +2026,7 @@ function showPackTypeScreen() {
   document.getElementById('custom-opts').style.display = state.packId === 'custom' ? '' : 'none';
   document.getElementById('nodupes-chip').classList.toggle('active', noDupesOn());
   buildCustomOpts();
+  pendingDailyClaim = false; // entering the manual flow abandons an undelivered daily
   showScreen('pack-type-screen');
 }
 
@@ -2163,6 +2167,8 @@ function customPick(cards) {
 
 let packReady = false;
 let packClicked = false;
+let packFailed = false;
+let packFetchToken = 0;
 let cachedCards = null;
 
 function goToPack() {
@@ -2213,19 +2219,40 @@ function goToPack() {
 
   packClicked = false;
   packReady = false;
+  packFailed = false;
   cachedCards = null;
 
+  // Token guards against a stale fetch from a *previous* selection resolving
+  // late and ripping the wrong pack (or yanking the user out of another screen).
+  const token = ++packFetchToken;
   fetchSelectedCards().then(cards => {
+    if (token !== packFetchToken) return; // superseded by a newer selection
     cachedCards = cards;
     packReady = true;
-    if (packClicked) revealCards();
-  }).catch(() => {});
+    if (packClicked && document.getElementById('pack-screen').classList.contains('active')) revealCards();
+  }).catch(() => {
+    if (token !== packFetchToken) return;
+    packFailed = true;
+    if (document.getElementById('pack-screen').classList.contains('active')) showPackLoadError();
+  });
 
   showScreen('pack-screen');
 }
 
+function showPackLoadError() {
+  document.getElementById('tap-hint').style.display = 'none';
+  document.getElementById('loading-wrap').style.display = 'none';
+  const err = document.getElementById('error-text');
+  err.textContent = 'Could not load cards for this set — check your connection or try another set.';
+  err.style.display = '';
+  document.getElementById('retry-btn').style.display = '';
+  document.getElementById('pack-art').style.pointerEvents = '';
+  packClicked = false;
+}
+
 function clickPack() {
   if (packClicked) return;
+  if (packFailed) { showPackLoadError(); return; }
   packClicked = true;
   playSfx('rip');
   buzz(20);
@@ -2238,6 +2265,8 @@ function clickPack() {
     document.getElementById('tap-hint').style.display = 'none';
     if (packReady) {
       revealCards();
+    } else if (packFailed) {
+      showPackLoadError();
     } else {
       document.getElementById('loading-wrap').style.display = 'flex';
     }
@@ -2317,7 +2346,9 @@ function lsSave(setId, cards) {
 
 // ── CACHE UI ──────────────────────────────────────────────────────────────────
 
-function isCached(setId) { return !!(memCache[setId] || localStorage.getItem(LS_PREFIX + setId)); }
+// localStorage only: memCache can hold sets whose persist failed (quota), and
+// "saved locally" should mean it survives a restart
+function isCached(setId) { return !!localStorage.getItem(LS_PREFIX + setId); }
 
 function updateCacheUI() {
   const allSets = ERAS.flatMap(e => e.sets);
@@ -2606,6 +2637,7 @@ function revealCards() {
   state.revealed = new Set();
   packClicked = false;
   recordPulls(pulled);
+  commitDailyClaim(); // daily pack delivered — now it counts
   startRipMode();
 }
 
@@ -2685,6 +2717,7 @@ function renderCardsScreen() {
   // Add-to-run button: named target when armed from a run, picker otherwise
   const runs = loadRuns();
   const addBtn = document.getElementById('add-to-run-btn');
+  addBtn.disabled = false; // fresh pack — re-enable after a previous "✓ Added"
   let pendingRun = pendingAddRunId ? runs.find(r => r.id === pendingAddRunId) : null;
   if (pendingAddRunId && !pendingRun) { clearAddArm(); pendingRun = null; } // armed run was deleted
   if (pendingRun) {
@@ -2769,7 +2802,7 @@ function makeCardEl(card, idx) {
   back.className = 'card-face card-back-face';
   back.id = `card-back-${idx}`;
   const backImg = document.createElement('img');
-  backImg.src = 'https://images.pokemontcg.io/cardback.png';
+  backImg.src = 'cardback.png';
   backImg.alt = '';
   back.appendChild(backImg);
 
@@ -2781,6 +2814,7 @@ function makeCardEl(card, idx) {
   loadingDiv.className = 'img-loading';
   loadingDiv.textContent = '···';
   const img = document.createElement('img');
+  img.crossOrigin = 'anonymous';
   img.src = card.images?.large || card.images?.small || '';
   img.alt = card.name || '';
   img.style.display = 'none';
@@ -2836,14 +2870,6 @@ function flipCard(idx) {
   if (state.revealed.size === state.cards.length) {
     document.getElementById('cards-sub').textContent = 'All revealed! Click any card to zoom in.';
   }
-}
-
-function revealAll() {
-  state.cards.forEach((_, i) => {
-    if (!state.revealed.has(i)) {
-      setTimeout(() => flipCard(i), i * 100);
-    }
-  });
 }
 
 // ── RIP MODE ──────────────────────────────────────────────────────────────────
@@ -3002,7 +3028,10 @@ async function svDownloadImages() {
   btn.textContent = '✓ Images saved for offline';
 }
 
+let svLoadToken = 0;
+
 async function goToSetView() {
+  const token = ++svLoadToken; // a newer View Set supersedes this one
   svFilter = null;
   svTypeFilter = null;
   svOwnFilter = null;
@@ -3023,12 +3052,14 @@ async function goToSetView() {
   try {
     cards = await fetchSelectedCards();
   } catch {
+    if (token !== svLoadToken) return; // stale — a newer view owns the screen
     document.getElementById('sv-loading-wrap').style.display = 'none';
     const err = document.getElementById('sv-error-text');
     err.textContent = 'Could not load cards for this set. Try downloading it first.';
     err.style.display = '';
     return;
   }
+  if (token !== svLoadToken) return; // stale — don't append into the newer render
 
   document.getElementById('sv-loading-wrap').style.display = 'none';
 
@@ -3109,6 +3140,7 @@ async function goToSetView() {
     wrap.dataset.owned = binder[card.id] ? '1' : '0';
     if (card.supertype) wrap.dataset.supertype = card.supertype;
     const img = document.createElement('img');
+    img.crossOrigin = 'anonymous';
     img.src = card.images?.large || card.images?.small || '';
     img.alt = card.name || '';
     img.loading = 'lazy';
@@ -3212,7 +3244,10 @@ function buildTableEraTabs() {
   });
 }
 
+let tableLoadToken = 0;
+
 async function loadTableData() {
+  const loadToken = ++tableLoadToken; // switching tabs mid-load cancels this run
   const isOverall = tableEraIdx === -1;
 
   // Build ordered set list (with era reference on each entry for color-coding)
@@ -3250,15 +3285,18 @@ async function loadTableData() {
   let done = 0;
   const BATCH = 8;
   for (let i = 0; i < setIds.length; i += BATCH) {
+    if (loadToken !== tableLoadToken) return; // a newer tab owns the screen now
     const batch = setIds.slice(i, i + BATCH);
     await Promise.allSettled(batch.map(async sid => {
       try { allSetData[sid] = await fetchSetCards(sid); }
       catch { allSetData[sid] = []; }
       done++;
+      if (loadToken !== tableLoadToken) return;
       progText.textContent = `Loading sets… ${done} / ${setIds.length}`;
       progFill.style.width = `${(done / setIds.length) * 100}%`;
     }));
   }
+  if (loadToken !== tableLoadToken) return;
   progFill.style.width = '100%';
   progWrap.style.display = 'none';
 
@@ -3523,6 +3561,7 @@ function showTrackerScreen() {
 async function runTracker() {
   const raw = document.getElementById('tracker-input').value.trim();
   if (!raw) return;
+  if (document.getElementById('tracker-go-btn').disabled) return; // search already running (Enter bypasses the button)
 
   const btn = document.getElementById('tracker-go-btn');
   const summary = document.getElementById('tracker-summary');
@@ -3751,7 +3790,8 @@ function loadDaily() {
 }
 
 function dateStr(offsetDays = 0) {
-  const d = new Date(Date.now() + offsetDays * 864e5);
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays); // calendar-aware: survives DST's 23/25-hour days
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
@@ -3772,13 +3812,25 @@ function updateDailyBtn() {
   }
 }
 
-function claimDailyPack() {
+// The claim is only committed when the pack actually delivers (see revealCards) —
+// otherwise a failed load would burn the day's pack and advance the streak for nothing.
+let pendingDailyClaim = false;
+
+function commitDailyClaim() {
+  if (!pendingDailyClaim) return;
+  pendingDailyClaim = false;
   const daily = loadDaily();
   if (daily.last === dateStr()) return;
   daily.streak = daily.last === dateStr(-1) ? daily.streak + 1 : 1;
   daily.last = dateStr();
   try { localStorage.setItem(DAILY_KEY, JSON.stringify(daily)); } catch {}
   updateDailyBtn();
+}
+
+function claimDailyPack() {
+  const daily = loadDaily();
+  if (daily.last === dateStr()) return;
+  pendingDailyClaim = true;
 
   // A random set from a random era — the surprise is the point
   const ei = Math.floor(Math.random() * ERAS.length);
@@ -3917,6 +3969,7 @@ function showBinderScreen() {
   best.forEach(([, e]) => {
     const img = document.createElement('img');
     img.className = 'bp-card';
+    img.crossOrigin = 'anonymous';
     img.src = e.img; img.alt = e.name || ''; img.loading = 'lazy';
     img.style.boxShadow = `0 0 14px ${(RARITY_COLOR[e.r] || '#888')}66`;
     img.onclick = () => openModal(e.img, e.name);
@@ -4016,6 +4069,7 @@ function renderBinderGrid() {
     wrap.dataset.rarity = e.r;
     wrap.dataset.name = (e.name || '').toLowerCase();
     const img = document.createElement('img');
+    img.crossOrigin = 'anonymous';
     img.src = e.img; img.alt = e.name || ''; img.loading = 'lazy';
     wrap.appendChild(img);
     if (e.n > 1) {
@@ -4046,7 +4100,10 @@ const RUNS_KEY = 'pkm-playthrough-runs';
 function loadRuns() {
   try { return JSON.parse(localStorage.getItem(RUNS_KEY) || '[]'); } catch { return []; }
 }
-function saveRuns(runs) { localStorage.setItem(RUNS_KEY, JSON.stringify(runs)); }
+function saveRuns(runs) {
+  try { localStorage.setItem(RUNS_KEY, JSON.stringify(runs)); }
+  catch { appAlert('Storage is full — that change could not be saved. Export a backup, then delete old runs or clear downloaded sets.', '⚠️ Save failed'); }
+}
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -4080,28 +4137,39 @@ async function importBackup(input) {
     const data = JSON.parse(await file.text());
     if (data.app !== 'pokemon-pack-opener' || !Array.isArray(data.runs)) throw new Error('bad format');
 
-    // Merge runs by id — never overwrite existing progress.
-    // Validate shape and sanitize ids (they get interpolated into onclick attributes).
+    // Merge runs by id. Validate shape and sanitize ids (they get interpolated
+    // into onclick attributes). When the same run exists on both devices, keep
+    // whichever has MORE progress — that's the whole point of moving backups.
     const runs = loadRuns();
-    const have = new Set(runs.map(r => r.id));
-    let added = 0;
+    let added = 0, updated = 0;
     data.runs.forEach((r, i) => {
       if (!r || !Array.isArray(r.cards) || typeof r.name !== 'string') return;
+      r.cards = r.cards.filter(c => c && typeof c === 'object');
       if (typeof r.id !== 'string' || !/^[\w-]+$/.test(r.id)) r.id = `run_${Date.now()}_${i}`;
-      if (have.has(r.id)) return;
       r.revealedCount = Math.min(Math.max(0, r.revealedCount || 0), r.cards.length);
-      r.statuses = r.statuses || {};
-      r.notes = r.notes || {};
+      r.statuses = (r.statuses && typeof r.statuses === 'object') ? r.statuses : {};
+      r.notes = (r.notes && typeof r.notes === 'object') ? r.notes : {};
+      const idx = runs.findIndex(x => x.id === r.id);
+      if (idx >= 0) {
+        const existing = runs[idx];
+        if (r.revealedCount > existing.revealedCount || r.cards.length > existing.cards.length) {
+          runs[idx] = r;
+          updated++;
+        }
+        return;
+      }
       runs.push(r);
       added++;
     });
     runs.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     saveRuns(runs);
 
-    // Merge binder & stats — take the max so re-importing never double-counts
+    // Merge binder & stats — take the max so re-importing never double-counts.
+    // Entries are validated: a malformed one would crash the Binder screen forever.
     const binder = loadBinder();
     Object.entries(data.binder || {}).forEach(([id, e]) => {
-      if (!binder[id] || (e.n || 0) > binder[id].n) binder[id] = e;
+      if (!e || typeof e !== 'object' || typeof e.n !== 'number') return;
+      if (!binder[id] || e.n > binder[id].n) binder[id] = e;
     });
     saveBinder(binder);
     const stats = loadStats();
@@ -4114,7 +4182,7 @@ async function importBackup(input) {
     saveStats(stats);
 
     showRunsScreen();
-    appAlert(`${added} run${added !== 1 ? 's' : ''} added, binder and stats merged.`, '✅ Backup imported');
+    appAlert(`${added} run${added !== 1 ? 's' : ''} added${updated ? `, ${updated} updated with newer progress` : ''}, binder and stats merged.`, '✅ Backup imported');
   } catch {
     appAlert("That file doesn't look like a Pack Opener backup.", '⚠️ Import failed');
   }
@@ -4144,6 +4212,7 @@ function clearAddArm() {
 
 async function addPackToRun() {
   if (!state.cards.length) return;
+  if (document.getElementById('add-to-run-btn')?.disabled) return; // this pack was already added
   const runs = loadRuns();
   if (runs.length === 0) return;
 
@@ -4176,6 +4245,10 @@ async function addPackToRun() {
   run.cards = [...revealed, ...rest];
   saveRuns(runs);
   clearAddArm();
+
+  // This pack is spent — block adding the same cards to a run twice
+  const spentBtn = document.getElementById('add-to-run-btn');
+  if (spentBtn) { spentBtn.disabled = true; spentBtn.textContent = `✓ Added to "${run.name}"`; }
 
   const view = await appConfirm(`${state.cards.length} Pokémon added to "${run.name}".`, { title: '✅ Added!', okText: 'View Run', cancelText: 'Keep Opening' });
   if (view) showRunDetail(run.id);
@@ -4293,7 +4366,7 @@ function showRunDetail(runId) {
     for (let i = 0; i < show; i++) {
       const fd = document.createElement('div');
       fd.className = 'rd-facedown' + (i === 0 ? ' rd-next' : '');
-      fd.innerHTML = `<img src="https://images.pokemontcg.io/cardback.png" alt="">`;
+      fd.innerHTML = `<img src="cardback.png" alt="">`;
       queue.appendChild(fd);
     }
     if (remaining > show) {
@@ -4347,6 +4420,7 @@ function makeRunCardEl(run, idx, isNew) {
 
   const img = document.createElement('img');
   img.className = 'rd-card-img' + (isNew ? ' rd-new' : '');
+  img.crossOrigin = 'anonymous';
   img.src = card.images?.small || card.images?.large || '';
   img.alt = card.name || '';
   img.onclick = () => { const url = card.images?.large || card.images?.small; if (url) openModal(url, card.name); };
@@ -4497,6 +4571,7 @@ function pickerSearch() {
   }
   results.forEach(c => {
     const img = document.createElement('img');
+    img.crossOrigin = 'anonymous';
     img.src = c.images?.small || c.images?.large || '';
     img.loading = 'lazy';
     img.title = c.name || '';
@@ -4615,6 +4690,7 @@ async function deleteRun(runId) {
   const sure = await appConfirm(`Delete "${run.name}"? This cannot be undone.`, { title: '🗑 Delete Run', okText: 'Delete', danger: true });
   if (!sure) return;
   saveRuns(runs.filter(r => r.id !== runId));
+  if (pendingAddRunId === runId) clearAddArm(); // don't leave "Adding to …" armed for a dead run
   showRunsScreen();
 }
 
