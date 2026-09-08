@@ -2653,8 +2653,11 @@ function revealCards() {
                : pack.id === 'standard' ? structuredPick(cachedCards, getPackStructure())
                : weightedPick(cachedCards, pack.weights, pack.count);
 
-  // Update logo from fetched set data
-  if (cachedCards[0]?.set?.images?.logo) {
+  // Update logo from fetched set data — only when the fallback design is actually
+  // showing; with real pack art the logo is hidden, and fetching it just produces
+  // 404 noise for brand-new sets whose logo isn't uploaded yet.
+  const fallbackVisible = document.getElementById('pack-fallback').style.display !== 'none';
+  if (fallbackVisible && cachedCards[0]?.set?.images?.logo) {
     const logo = document.getElementById('pack-logo');
     logo.src = cachedCards[0].set.images.logo;
     logo.style.display = '';
