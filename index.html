@@ -1570,7 +1570,8 @@ const ERAS = [
       { id:'me2',    name:'Phantasmal Flames', year:'2025', desc:'Mega Charizard X ex headlines with a jet-black dragon redesign. Fire and ghost themes throughout.' },
       { id:'me2pt5', name:'Ascended Heroes',   year:'2026', desc:'A massive 295-card celebration set packed with Mega Pokémon and special-art reprints of era favorites.' },
       { id:'me3',    name:'Perfect Order',     year:'2026', desc:'Mega Zygarde ex enforces order alongside Mega Clefable and Mega Starmie. Structure and balance themes.' },
-      { id:'me4',    name:'Chaos Rising',      year:'2026', desc:'The newest set. Mega Greninja ex, Mega Dragalge, and Mega Pyroar bring the chaos.' },
+      { id:'me4',    name:'Chaos Rising',      year:'2026', desc:'Mega Greninja ex, Mega Dragalge, and Mega Pyroar bring the chaos.' },
+      { id:'me5',    name:'Pitch Black',       year:'2026', desc:'The newest set. Mega Darkrai ex leads a shadowy lineup with Mega Chandelure and Mega Zeraora.' },
     ]
   },
 ];
@@ -1675,7 +1676,7 @@ const PACK_IMAGES = {
   swsh12:     'https://archives.bulbagarden.net/media/upload/2/2b/SWSH12_Booster_Lugia.jpg',
   swsh12pt5:  'https://archives.bulbagarden.net/media/upload/d/dd/Crown_Zenith_Booster.jpg',
   // ── Scarlet & Violet ──────────────────────────────────────────────────────────
-  sv1:        'https://archives.bulbagarden.net/media/upload/e/e8/SV1_pack_Koraidon.png',
+  sv1:        'https://archives.bulbagarden.net/media/upload/2/2e/SV1_Booster_Koraidon.png',
   sv2:        'https://archives.bulbagarden.net/media/upload/0/0b/SV2_Booster_Meowscarada.png',
   sv3:        'https://archives.bulbagarden.net/media/upload/5/52/SV3_Booster_Charizard.png',
   sv3pt5:     'https://archives.bulbagarden.net/media/upload/2/24/151_Booster.png',
@@ -1697,6 +1698,7 @@ const PACK_IMAGES = {
   me2pt5:     'https://archives.bulbagarden.net/media/upload/1/1b/Ascended_Heroes_Booster.png',
   me3:        'https://archives.bulbagarden.net/media/upload/3/34/ME3_Booster_Mega_Zygarde.png',
   me4:        'https://archives.bulbagarden.net/media/upload/1/19/ME4_Booster_Mega_Greninja.png',
+  me5:        'https://archives.bulbagarden.net/media/upload/a/ae/ME5_Booster_Mega_Darkrai.png',
 };
 
 // Authentic booster structure per era: slot counts + rare-slot odds.
@@ -2168,6 +2170,7 @@ function customPick(cards) {
 let packReady = false;
 let packClicked = false;
 let packFailed = false;
+let packRevealed = false;
 let packFetchToken = 0;
 let cachedCards = null;
 
@@ -2220,6 +2223,7 @@ function goToPack() {
   packClicked = false;
   packReady = false;
   packFailed = false;
+  packRevealed = false;
   cachedCards = null;
 
   // Token guards against a stale fetch from a *previous* selection resolving
@@ -2263,7 +2267,7 @@ function clickPack() {
   setTimeout(() => {
     art.style.pointerEvents = 'none';
     document.getElementById('tap-hint').style.display = 'none';
-    if (packReady) {
+    if (packReady && !packRevealed && document.getElementById('pack-screen').classList.contains('active')) {
       revealCards();
     } else if (packFailed) {
       showPackLoadError();
@@ -2339,10 +2343,14 @@ function lsSave(setId, cards) {
   try {
     localStorage.setItem(LS_PREFIX + setId, payload);
   } catch {
-    Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX)).forEach(k => localStorage.removeItem(k));
-    try { localStorage.setItem(LS_PREFIX + setId, payload); } catch {}
+    // Quota full: this set stays in memory for the session. Never wipe other sets.
+    if (!storageQuotaHit) {
+      storageQuotaHit = true;
+      appAlert('Device storage is full, so this set will load from the network instead of being saved offline. Your runs, binder, and already-downloaded sets are safe. To free space: Playthroughs → Export Backup, then delete old runs.', '⚠️ Storage full');
+    }
   }
 }
+let storageQuotaHit = false;
 
 // ── CACHE UI ──────────────────────────────────────────────────────────────────
 
@@ -2434,7 +2442,17 @@ function normalizeCards(raw, setId) {
   })).filter(c => c.images.large || c.images.small);
 }
 
-async function fetchSetCards(setId) {
+// Concurrent callers (Set Table + Download All + View Set) share one request per set
+const inflightSets = {};
+function fetchSetCards(setId) {
+  if (memCache[setId] && !isPlaceholderSet(memCache[setId])) return Promise.resolve(memCache[setId]);
+  if (!inflightSets[setId]) {
+    inflightSets[setId] = fetchSetCardsNetwork(setId).finally(() => { delete inflightSets[setId]; });
+  }
+  return inflightSets[setId];
+}
+
+async function fetchSetCardsNetwork(setId) {
   if (memCache[setId] && !isPlaceholderSet(memCache[setId])) return memCache[setId];  // 1. memory
   const ls = lsLoad(setId);
   if (ls) { memCache[setId] = ls; return ls; }    // 2. localStorage
@@ -2480,15 +2498,22 @@ async function fetchSetCards(setId) {
   return cards;
 }
 
+// Upstream rarity vocabulary drifts across eras ("Rare Ultra" → "Ultra Rare",
+// "Black White Rare", "MEGA_ATTACK_RARE"…). Match by keyword, most-prized tier first.
+const seenUnknownRarities = new Set();
 function normalizeRarity(r) {
   if (!r) return 'common';
-  const s = r.toLowerCase();
-  if (s.includes('secret') || s.includes('rainbow') || s.includes('hyper') || s.includes('special illustration') || s.includes('shiny gx') || s.includes('shiny v') || s.includes('shiny rare')) return 'ultra-rare';
-  if (s.includes('amazing rare')) return 'ultra-rare';
-  if (s.includes('rare holo') || s.includes('rare ultra') || s.includes('double rare') || s.includes('illustration rare') || s.includes('ace spec') || s.includes('trainer gallery') || s.includes('shining')) return 'rare-holo';
-  if (s.includes('rare')) return 'rare';
-  if (s.includes('promo')) return 'rare';
+  const s = r.toLowerCase().replace(/_/g, ' ');
+  // Chase tier: secrets, rainbows, gold stars, shinies, full-art ex/GX/V, special illustration
+  if (/secret|rainbow|hyper|special illustration|shiny|amazing|ultra rare|rare ultra|holo star|black white rare|mega/.test(s)) return 'ultra-rare';
+  // Holo tier: every "rare holo" variant plus each era's signature hit rarity
+  if (/rare holo|double rare|illustration rare|ace spec|rare ace|trainer gallery|shining|radiant|prime|break|prism|legend|classic collection|holo/.test(s)) return 'rare-holo';
+  if (/rare|promo/.test(s)) return 'rare';
   if (s.includes('uncommon')) return 'uncommon';
+  if (!s.includes('common') && !seenUnknownRarities.has(r)) {
+    seenUnknownRarities.add(r);
+    console.warn('[pack-opener] unrecognized rarity treated as common:', r);
+  }
   return 'common';
 }
 
@@ -2619,6 +2644,9 @@ function revealCards() {
     packClicked = false;
     return;
   }
+
+  if (packRevealed) return; // both the fetch callback and the tap timer can reach here — reveal once
+  packRevealed = true;
 
   const pack = PACKS.find(p => p.id === state.packId);
   const pulled = pack.id === 'custom'   ? customPick(cachedCards)
@@ -4141,7 +4169,7 @@ async function importBackup(input) {
     // into onclick attributes). When the same run exists on both devices, keep
     // whichever has MORE progress — that's the whole point of moving backups.
     const runs = loadRuns();
-    let added = 0, updated = 0;
+    let added = 0, updated = 0, conflicts = 0;
     data.runs.forEach((r, i) => {
       if (!r || !Array.isArray(r.cards) || typeof r.name !== 'string') return;
       r.cards = r.cards.filter(c => c && typeof c === 'object');
@@ -4151,10 +4179,14 @@ async function importBackup(input) {
       r.notes = (r.notes && typeof r.notes === 'object') ? r.notes : {};
       const idx = runs.findIndex(x => x.id === r.id);
       if (idx >= 0) {
-        const existing = runs[idx];
-        if (r.revealedCount > existing.revealedCount || r.cards.length > existing.cards.length) {
-          runs[idx] = r;
-          updated++;
+        const ex = runs[idx];
+        const inDominates = r.revealedCount >= ex.revealedCount && r.cards.length >= ex.cards.length;
+        const exDominates = ex.revealedCount >= r.revealedCount && ex.cards.length >= r.cards.length;
+        if (inDominates && !exDominates) { runs[idx] = r; updated++; }
+        else if (!exDominates) {
+          // Each device progressed differently (one revealed more, the other added a pack) — keep both
+          r.id = `${r.id}_imported_${Date.now()}`; r.name = `${r.name} (imported)`;
+          runs.push(r); conflicts++;
         }
         return;
       }
@@ -4182,7 +4214,7 @@ async function importBackup(input) {
     saveStats(stats);
 
     showRunsScreen();
-    appAlert(`${added} run${added !== 1 ? 's' : ''} added${updated ? `, ${updated} updated with newer progress` : ''}, binder and stats merged.`, '✅ Backup imported');
+    appAlert(`${added} run${added !== 1 ? 's' : ''} added${updated ? `, ${updated} updated with newer progress` : ''}${conflicts ? `, ${conflicts} kept as "(imported)" copies because both devices had different progress` : ''}, binder and stats merged.`, '✅ Backup imported');
   } catch {
     appAlert("That file doesn't look like a Pack Opener backup.", '⚠️ Import failed');
   }
